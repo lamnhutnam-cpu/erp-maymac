@@ -1,0 +1,126 @@
+/* Layout */
+*{box-sizing:border-box}
+body{margin:0;background:#f4f7fb;color:#1f2937;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:240px;background:linear-gradient(180deg,#0b63f6 0%,#1fb6ff 100%);color:#fff;overflow:auto;padding:16px 10px}
+.main{margin-left:240px;min-height:100vh;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;padding:14px 20px;z-index:5}
+.top-title{font-size:20px;font-weight:700}
+.actions{display:flex;gap:8px}
+.content{padding:20px}
+.foot{text-align:center;padding:20px;color:#6b7280}
+
+/* Brand */
+.brand{display:flex;align-items:center;gap:10px;margin:4px 8px 16px}
+.brand-icon{width:36px;height:36px;border-radius:12px;background:#fff2;padding:6px;display:grid;place-items:center;font-size:18px}
+.brand-title{font-weight:800;letter-spacing:.2px}
+.brand-sub{font-size:12px;opacity:.8}
+
+/* Sidebar menu */
+.menu-group{margin:10px 6px}
+.menu-title{font-size:12px;opacity:.8;margin:10px 10px}
+.menu-item{display:block;margin:4px 6px;padding:10px 12px;border-radius:12px;color:#fff;text-decoration:none;cursor:pointer}
+.menu-item:hover{background:#ffffff26}
+.menu-item.active{background:#fff;color:#0b63f6;box-shadow:0 6px 20px rgba(0,0,0,.1)}
+
+/* Buttons/Chips */
+.btn{padding:8px 12px;border-radius:10px;border:1px solid #e5e7eb;background:#fff;cursor:pointer}
+.btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+.btn.danger{background:#ef4444;border-color:#ef4444;color:#fff}
+.chip{border:none;border-radius:20px;padding:6px 10px;font-weight:700}
+.chip.success{background:#e8fbe7;color:#138a2e}
+
+/* Cards & Grid */
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 4px 20px rgba(0,0,0,.04)}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.kpi-title{font-size:12px;color:#6b7280}
+.kpi-value{font-size:24px;font-weight:800;margin:4px 0}
+.kpi-sub{font-size:12px;color:#6b7280}
+.quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.quick{display:flex;align-items:center;gap:12px;border:1px solid #e5e7eb;background:#fff;border-radius:14px;padding:12px;cursor:pointer}
+.quick:hover{background:#f8fafc}
+.q-icon{width:36px;height:36px;border-radius:10px;background:#eef2ff;display:grid;place-items:center}
+
+/* List head + search */
+.list-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.search{border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;min-width:280px}
+
+/* Table */
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}
+th,td{padding:12px;border-bottom:1px solid #eef2f7;text-align:left}
+thead{background:#f8fafc}
+.right{text-align:right}
+
+/* Status tags giống ảnh */
+.tag{padding:4px 8px;border-radius:12px;font-size:12px;font-weight:700;display:inline-block}
+.tag.gray{background:#f3f4f6;color:#374151}
+.tag.green{background:#def7ec;color:#03543f}
+.tag.yellow{background:#fef3c7;color:#92400e}
+.tag.blue{background:#e1effe;color:#1e3a8a}
+.tag.red{background:#fee2e2;color:#7f1d1d}
+
+/* Responsive */
+@media (max-width: 1100px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .quick-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width: 800px){
+  .sidebar{position:static;width:auto}
+  .main{margin-left:0}
+  .kpi-grid{grid-template-columns:1fr}
+  .quick-grid{grid-template-columns:1fr}
+}
+
+/* Ẩn nhanh bất kỳ khối nào */
+.hidden { display: none !important; }
+
+/* ===== CUSTOMERS UI ===== */
+.page-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.page-head h1{margin:0;font-size:24px}
+
+.quick-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.quick.big{padding:18px;border-radius:16px;border:1px solid #e5e7eb;background:#fff;display:flex;align-items:center;gap:12px;cursor:pointer}
+.quick.big:hover{background:#f8fafc}
+.search.w-full{width:100%}
+
+.kh-list{display:flex;flex-direction:column;gap:10px}
+.kh-card{display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid #e5e7eb;border-radius:16px;background:#fff}
+.kh-left{display:flex;gap:12px;align-items:center}
+.avatar{width:40px;height:40px;border-radius:12px;background:#eef2ff;display:grid;place-items:center;font-weight:800;color:#1e3a8a}
+.kh-info{display:flex;flex-direction:column;gap:4px}
+.kh-name{font-weight:700}
+.kh-line{display:flex;gap:14px;flex-wrap:wrap;color:#374151}
+.muted{color:#6b7280;font-size:12px}
+
+.kh-right{text-align:right}
+.kh-debt{margin-bottom:6px}
+.tag{padding:4px 8px;border-radius:12px;font-size:12px;font-weight:700;display:inline-block}
+.tag.green{background:#def7ec;color:#03543f}
+.tag.red{background:#fee2e2;color:#7f1d1d}
+
+.btn.sm{padding:6px 10px;font-size:12px;border-radius:10px;border:1px solid #e5e7eb;background:#fff;cursor:pointer}
+.btn.sm.info{background:#e1effe;color:#1e3a8a;border-color:#e1effe}
+.btn.sm.primary{background:#2563eb;color:#fff;border-color:#2563eb}
+.btn.sm.danger{background:#ef4444;color:#fff;border-color:#ef4444}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.25);display:grid;place-items:center;z-index:50}
+.modal.hidden{display:none}
+.modal-body{width:min(720px,92vw);background:#fff;border-radius:16px;border:1px solid #e5e7eb;padding:16px}
+
+/* Modal form đẹp hơn */
+.modal-body h3{margin-top:0;font-size:20px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+.row .col{display:flex;flex-direction:column;gap:6px}
+label{font-weight:600;margin-bottom:4px}
+.req{color:#ef4444}
+input, select, textarea{
+  width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px;
+  background:#fff; outline:none;
+}
+input:focus, select:focus, textarea:focus{border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+textarea{resize:vertical}
+.badge.gray{background:#f3f4f6;color:#374151;border-radius:999px;padding:2px 8px;font-size:12px;margin-left:6px}
+
+/* mobile */
+@media (max-width: 760px){ .row{grid-template-columns:1fr} }

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <title>SHOP BÁN HÀNG – ERP May Mặc (SPA)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="./style.css" rel="stylesheet" />
+</head>
+<body>
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">📄</div>
+      <div>
+        <div class="brand-title">SHOP BÁN HÀNG</div>
+        <div class="brand-sub">Quản lý bán hàng offline</div>
+      </div>
+    </div>
+
+    <div class="menu-group">
+      <div class="menu-title">TỔNG QUAN</div>
+      <a class="menu-item active" data-page="overview">🏠 Dashboard</a>
+    </div>
+
+    <div class="menu-group">
+      <div class="menu-title">QUẢN LÝ CƠ BẢN</div>
+      <a class="menu-item" data-page="customers">👤 Khách hàng</a>
+      <a class="menu-item" data-page="suppliers">🏭 Nhà cung cấp</a>
+      <a class="menu-item" data-page="product">📦 Sản phẩm</a>
+      <a class="menu-item" data-page="categories">🗂 Danh mục</a>
+      <a class="menu-item" data-page="inventory">📦 Kho hàng</a>
+    </div>
+
+    <div class="menu-group">
+      <div class="menu-title">NGHIỆP VỤ</div>
+      <a class="menu-item" data-page="debts">💳 Công nợ</a>
+      <a class="menu-item" data-page="orders_view">📑 Quản lý đơn hàng</a>
+      <a class="menu-item" data-page="order">🧾 Tạo đơn mới</a>
+      <a class="menu-item" data-page="manufacturing">🧵 Sản xuất</a>
+      <a class="menu-item" data-page="timesheet">📝 Chấm công</a>
+      <a class="menu-item" data-page="payroll">💰 Tính lương</a>
+    </div>
+
+    <div class="menu-group">
+      <div class="menu-title">BÁO CÁO</div>
+      <a class="menu-item" data-page="reports">📊 Báo cáo</a>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="top-title">Hệ thống Quản lý</div>
+      <div class="actions">
+        <button class="chip success">🟩 PITC</button>
+        <button class="btn primary" data-page="order">🧾 Đơn hàng</button>
+        <button class="btn danger">🚪 Đăng xuất</button>
+      </div>
+    </header>
+
+    <!-- DASHBOARD SHELL (KPI + quick actions) -->
+    <section class="content" id="dashboard-shell">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-title">ĐƠN HÀNG HÔM NAY</div>
+          <div class="kpi-value" id="kpi_today_orders">0</div>
+          <div class="kpi-sub">Tổng: <span id="kpi_today_amount">0 VND</span></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">ĐƠN HÀNG TUẦN NÀY</div>
+          <div class="kpi-value" id="kpi_week_orders">0</div>
+          <div class="kpi-sub">Tổng: <span id="kpi_week_amount">0 VND</span></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">ĐƠN HÀNG THÁNG NÀY</div>
+          <div class="kpi-value" id="kpi_month_orders">0</div>
+          <div class="kpi-sub">Tổng: <span id="kpi_month_amount">0 VND</span></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">TỔNG ĐƠN HÀNG</div>
+          <div class="kpi-value" id="kpi_all_orders">0</div>
+          <div class="kpi-sub">Tất cả thời gian</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Quản lý đơn hàng</h3>
+        <div class="quick-grid">
+          <button class="quick" data-page="order">
+            <div class="q-icon">📝</div><div>Tạo đơn hàng mới</div>
+          </button>
+          <button class="quick" data-page="orders_view">
+            <div class="q-icon">📅</div><div>Đơn hàng hôm nay</div>
+          </button>
+          <button class="quick" data-page="orders_view">
+            <div class="q-icon">📈</div><div>Đơn hàng tuần</div>
+          </button>
+          <button class="quick" data-page="reports">
+            <div class="q-icon">📄</div><div>Xuất báo cáo</div>
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="list-head">
+          <h3>📋 Danh sách đơn hàng</h3>
+          <input class="search" id="search_orders" placeholder="Tìm kiếm theo mã đơn, khách hàng..." />
+        </div>
+        <div id="orders_table_shell">
+          <!-- bảng danh sách render bằng script.js (pageOrdersView) -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Dynamic app pages sẽ render vào đây -->
+    <main id="app"></main>
+
+    <footer class="foot">© ERP May Mặc — SPA mượt như app</footer>
+  </div>
+
+  <script src="./script.js"></script>
+  <script>
+    // Kết nối menu/sidebar + quick action với router của script.js
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('[data-page]').forEach(el => {
+        el.addEventListener('click', () => loadPage(el.dataset.page));
+      });
+      // Khi vào “Dashboard” thì đồng thời load Orders View vào shell để giống ảnh
+      loadPage('overview');
+      // Gắn ô tìm kiếm điều khiển bảng đơn hàng (nếu có)
+      const search = document.getElementById('search_orders');
+      if (search) search.addEventListener('input', () => {
+        const box = document.querySelector('#orders_table_shell');
+        if (box && typeof window._filterOrdersShell === 'function') {
+          window._filterOrdersShell(search.value || '');
+        }
+      });
+    });
+  </script>
+</body>
+</html>
