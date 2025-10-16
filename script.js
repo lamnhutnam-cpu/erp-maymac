@@ -5,18 +5,22 @@
          Manufacturing, Timesheet, Payroll
    API:   Google Apps Script Web App thông qua Netlify Function
    Tính năng:
-     - SPA: ẩn/hiện shell Dashboard
+     - Ẩn/hiện shell Dashboard
      - Event delegation cho menu [data-page]
      - Bảng, modal form
      - Hàng đợi offline (localStorage) cho POST
-     - Thêm + Sửa + Xoá khách hàng (cần GAS tương ứng)
+     - Thêm + Sửa + Xoá khách hàng
+     - Công nợ: tạo đơn cộng nợ, thu tiền từng phần theo “Nguồn”
    ============================================================ */
 
 /* ================== CONFIG ================== */
 // Nếu frontend và function cùng 1 site Netlify:
 const API_URL = "/.netlify/functions/gas";
-// Nếu chạy ngoài Netlify, dùng URL GAS trực tiếp:
-// const API_URL = "https://script.google.com/macros/s/AKfy.../exec";
+
+// Nguồn thu (khách trả giúp bên phụ liệu…)
+const PAYMENT_SOURCES = [
+  "Mẹ", "Trần tài", "Vải thể thao", "Mẹ trả", "Hoàng anh", "Vải sỉ"
+];
 
 /* ================== UTILS ================== */
 const $  = (sel, el = document) => el.querySelector(sel);
@@ -40,16 +44,13 @@ const toObjects = (headers, rows) =>
     return o;
   });
 
-// Ép số an toàn (bỏ dấu, chữ, VND…)
-const toNumber = (x) => Math.round(Number(String(x || "").replace(/[^\d.-]/g, "")) || 0);
-
 function renderTableArray(headers, data) {
   if (!data?.length) return `<div>—</div>`;
   let html = `<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>`;
   data.forEach((rowObj) => {
     html += `<tr>${headers
       .map((h) =>
-        `<td${/SL|Số lượng|Đơn giá|Thành tiền|Tổng|Ton|Gia|Amount|Qty/i.test(h) ? ' class="right"' : ""}>${rowObj[h] ?? ""}</td>`
+        `<td${/SL|Số lượng|Đơn giá|Thành tiền|Tổng|Ton|Gia|Amount|Qty|No/i.test(h) ? ' class="right"' : ""}>${rowObj[h] ?? ""}</td>`
       )
       .join("")}</tr>`;
   });
@@ -129,7 +130,7 @@ const state = {
   orders: [],
   orderLines: [],
   cacheAt: 0,
-  customers: [], // giữ lại để filter + edit nhanh
+  customers: [],
 };
 const CACHE_TTL = 60 * 1000;
 
@@ -166,28 +167,19 @@ async function loadOrders(invalidate = false) {
   state.cacheAt = now;
 }
 
-// CHỖ NÀY ĐÃ FIX: tự tính thành tiền nếu sheet chưa có
 async function loadOrderDetails(ma_don) {
   const rs = await apiGet("ChiTietDonHang");
   const rows = rs.ok ? rs.rows : [];
   if (!rows?.length) return [];
   const h = rows[0];
-
-  const get = (o, ...keys) => {
-    for (const k of keys) if (o[k] != null && o[k] !== "") return o[k];
-    return "";
-  };
-
   return toObjects(h, rows.slice(1))
-    .map((o) => {
-      const ma  = get(o, "Mã đơn", "MaDon");
-      const ten = get(o, "Tên sản phẩm", "TenSP", "Sản phẩm", "SanPham");
-      const sl  = toNumber(get(o, "Số lượng", "SL", "SoLuong"));
-      const dg  = toNumber(get(o, "Đơn giá", "DonGia"));
-      let tt    = toNumber(get(o, "Thành tiền", "ThanhTien"));
-      if (!tt) tt = sl * dg;
-      return { ma, ten, so_luong: sl, don_gia: dg, thanh_tien: tt };
-    })
+    .map((o) => ({
+      ma: o["Mã đơn"] || o["MaDon"] || "",
+      ten: o["Tên sản phẩm"] || o["TenSP"] || "",
+      so_luong: Number(o["Số lượng"] || o["SL"] || 0),
+      don_gia:  Number(o["Đơn giá"]   || o["DonGia"] || 0),
+      thanh_tien: Number(o["Thành tiền"] || o["ThanhTien"] || 0),
+    }))
     .filter((x) => x.ma === ma_don);
 }
 
@@ -207,7 +199,7 @@ async function pageOverview() {
   appEl().innerHTML = ""; // để vùng app trống khi đang ở dashboard
 }
 
-/* ---------- CUSTOMERS (Thêm + Sửa + Xoá) ---------- */
+/* ---------- CUSTOMERS (Thêm + Sửa + Xoá + Công nợ) ---------- */
 async function pageCustomers() {
   toggleShell(false);
 
@@ -292,6 +284,41 @@ async function pageCustomers() {
     </div>
   `;
 
+  // Modal thu tiền
+  appEl().insertAdjacentHTML('beforeend', `
+    <div id="pay-modal" class="modal hidden">
+      <div class="modal-body">
+        <h3>💵 Thu tiền khách hàng</h3>
+        <input type="hidden" id="pay-ma" />
+        <div class="row">
+          <div class="col"><label>Ngày</label><input id="pay-ngay" value="${todayStr()}"></div>
+          <div class="col"><label>Số tiền</label><input id="pay-tien" type="number" value="0"></div>
+        </div>
+        <div class="row">
+          <div class="col">
+            <label>Nguồn</label>
+            <select id="pay-nguon">
+              ${PAYMENT_SOURCES.map(s=>`<option>${s}</option>`).join("")}
+            </select>
+          </div>
+          <div class="col">
+            <label>Diễn giải</label>
+            <input id="pay-note" placeholder="VD: KH trả đợt 1">
+          </div>
+        </div>
+        <div class="right" style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" id="pay-cancel">Hủy</button>
+          <button class="btn primary" id="pay-save">Ghi thu</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  const payModal = $("#pay-modal");
+  const payOpen  = () => payModal.classList.remove("hidden");
+  const payClose = () => payModal.classList.add("hidden");
+  $("#pay-cancel").onclick = payClose;
+
   const modal = $("#kh-modal");
   const openModal  = () => modal.classList.remove("hidden");
   const closeModal = () => modal.classList.add("hidden");
@@ -309,7 +336,7 @@ async function pageCustomers() {
   };
 
   let customers = [];
-  let mode = "create"; // "create" | "edit"
+  let mode = "create";
 
   function clearForm() {
     form.ma.value = "";
@@ -338,10 +365,20 @@ async function pageCustomers() {
       .join("")
       .toUpperCase()) || "KH";
 
+  async function fetchAllDebt() {
+    const rs = await apiPost({ action:"allCustomerDebt" });
+    const map = {};
+    if (rs?.ok && Array.isArray(rs.items)) {
+      rs.items.forEach(x => { map[x.MaKH || x.TenKH] = x.No; });
+    }
+    return map;
+  }
+
   async function loadCustomersData() {
     const rs = await apiGet("KhachHang");
     const rows = rs.ok ? rs.rows : [];
     if (!rows?.length) { customers = []; render(""); return; }
+
     const data = rows.slice(1).map((r) => ({
       ma:     r[0],
       ten:    r[1],
@@ -351,7 +388,13 @@ async function pageCustomers() {
       diachi: r[5] || "",
       ghichu: r[6] || "",
     }));
-    customers = data;
+
+    const debtMap = await fetchAllDebt();
+    customers = data.map(x => ({
+      ...x,
+      no: debtMap[x.ma] ?? debtMap[x.ten] ?? 0
+    }));
+
     render($("#kh-search").value || "");
   }
 
@@ -390,7 +433,13 @@ async function pageCustomers() {
               </div>
             </div>
             <div class="kh-right">
+              <div class="kh-debt">
+                ${ (x.no||0) > 0
+                    ? `<span class="tag red">Nợ: ${fmtVND(x.no)}</span>`
+                    : `<span class="tag green">Không nợ</span>` }
+              </div>
               <div class="kh-actions">
+                <button class="btn sm success" data-act="pay"    data-id="${x.ma}">Thu tiền</button>
                 <button class="btn sm info"    data-act="detail" data-id="${x.ma}">Chi tiết</button>
                 <button class="btn sm primary" data-act="edit"   data-id="${x.ma}">Sửa</button>
                 <button class="btn sm danger"  data-act="delete" data-id="${x.ma}">Xóa</button>
@@ -439,7 +488,7 @@ async function pageCustomers() {
       rs = await safePost({ action: "createCustomer", data: payload });
     } else {
       rs = await safePost({
-        action: "updateCustomer",       // <-- Cần endpoint ở GAS
+        action: "updateCustomer",
         data: { ma: form.ma.value, ...payload },
       });
     }
@@ -449,12 +498,11 @@ async function pageCustomers() {
     await loadCustomersData();
     toast(mode === "create"
       ? (rs.ok ? `Đã tạo KH ${rs.ma_kh || ""}` : "Đã lưu chờ (offline)")
-      : (rs.ok ? `Đã cập nhật KH ${form.ma.value}` : "Đã lưu chờ (offline)"),
-      rs.ok ? "success" : "info"
+      : (rs.ok ? `Đã cập nhật KH ${form.ma.value}` : "Đã lưu chờ (offline)")
     );
   };
 
-  // Delegation: detail / edit / delete
+  // Delegation: pay / detail / edit / delete
   document.addEventListener("click", async (ev) => {
     const btn = ev.target.closest(".kh-actions .btn");
     if (!btn || !$("#kh-list").contains(btn)) return;
@@ -462,11 +510,22 @@ async function pageCustomers() {
     const id  = btn.dataset.id;
     const act = btn.dataset.act;
     const row = customers.find((x) => x.ma === id);
+    if (!row) return;
+
+    if (act === "pay") {
+      $("#pay-ma").value   = row.ma;
+      $("#pay-tien").value = 0;
+      $("#pay-note").value = `Khách ${row.ten} trả tiền`;
+      $("#pay-nguon").value = PAYMENT_SOURCES[0] || "";
+      $("#pay-ngay").value  = todayStr();
+      payOpen();
+    }
 
     if (act === "detail") {
-      alert(
-        `Mã: ${row.ma}\nTên: ${row.ten}\nLoại: ${row.loai}\nSĐT: ${row.sdt}\nEmail: ${row.email}\nĐịa chỉ: ${row.diachi}\nGhi chú: ${row.ghichu}`
-      );
+      const rs = await apiPost({ action:"ledgerByCustomer", data:{ MaKH: row.ma }});
+      if (!rs.ok) return alert(rs.error || "Không tải được sổ cái");
+      const sum = (rs.rows||[]).reduce((s,r)=> s + Number(r[4]||0) - Number(r[5]||0), 0);
+      alert(`Sao kê ${row.ten}\nSố dòng: ${rs.rows.length}\nCông nợ hiện tại: ${fmtVND(sum)}`);
     }
 
     if (act === "edit") {
@@ -479,16 +538,33 @@ async function pageCustomers() {
 
     if (act === "delete") {
       if (!confirm(`Xóa khách hàng ${row.ten} (${row.ma})?`)) return;
-      const rs = await safePost({
-        action: "deleteCustomer",      // <-- Cần endpoint ở GAS
-        data: { ma: row.ma },
-      });
+      const rs = await safePost({ action:"deleteCustomer", data:{ ma: row.ma } });
       if (!rs.ok && !rs.queued) return alert(rs.error || "Không xóa được");
       await loadCustomersData();
-      toast(rs.ok ? "Đã xóa" : "Đã xếp hàng đợi (offline)", rs.ok ? "success" : "info");
+      toast(rs.ok ? "Đã xóa" : "Đã xếp hàng đợi (offline)");
     }
   });
 
+  // Ghi thu
+  $("#pay-save").onclick = async () => {
+    const ma    = $("#pay-ma").value;
+    const ngay  = $("#pay-ngay").value;
+    const tien  = Number($("#pay-tien").value || 0);
+    const nguon = $("#pay-nguon").value;
+    const note  = $("#pay-note").value.trim();
+    if (!ma || tien <= 0) return alert("Thiếu mã KH hoặc số tiền không hợp lệ");
+
+    const rs = await safePost({
+      action: "addPayment",
+      data: { Ngay: ngay, MaKH: ma, SoTien: tien, Nguon: nguon, DienGiai: note }
+    });
+    if (!rs.ok && !rs.queued) return alert(rs.error || "Lỗi ghi thu");
+    payClose();
+    await loadCustomersData();
+    toast(rs.ok ? "Đã ghi phiếu thu" : "Đã xếp hàng đợi (offline)", rs.ok ? "success" : "info");
+  };
+
+  // load lần đầu
   await loadCustomersData();
 }
 
@@ -546,7 +622,7 @@ async function pageOrder() {
     <div class="card">
       <h2>🧾 Tạo đơn hàng</h2>
       <div class="row">
-        <div class="col"><label>Khách hàng</label><input id="dh-khach"></div>
+        <div class="col"><label>Khách hàng</label><input id="dh-khach" placeholder="Nhập đúng tên KH trong danh sách"></div>
         <div class="col"><label>Ngày</label><input id="dh-ngay" value="${todayStr()}"></div>
       </div>
       <div class="row">
@@ -569,7 +645,7 @@ async function pageOrder() {
       <div class="right" id="dh-total" style="margin-top:8px;font-weight:700"></div>
       <div style="margin-top:10px"><button class="primary" id="btn-save-order" disabled>✅ Lưu đơn</button></div>
     </div>
-  `;
+  ";
 
   await loadProducts();
   const sel = $("#dh-sp");
@@ -700,15 +776,12 @@ async function pageOrdersView() {
           "Tên sản phẩm": d.ten,
           "Số lượng": d.so_luong,
           "Đơn giá": fmtVND(d.don_gia),
-          // luôn dùng giá trị đã tính (fallback nếu sheet rỗng)
-          "Thành tiền": fmtVND(d.thanh_tien || d.so_luong * d.don_gia),
+          "Thành tiền": fmtVND(d.thanh_tien),
         }));
-        const total = detail.reduce((s, x) => s + (x.thanh_tien || (x.so_luong * x.don_gia)), 0);
-
         $("#od-detail").innerHTML =
           renderTableArray(["Tên sản phẩm", "Số lượng", "Đơn giá", "Thành tiền"], rows) +
           `<div class="right" style="margin-top:8px;font-weight:700">
-            Tổng: ${fmtVND(total)}
+            Tổng: ${fmtVND(detail.reduce((s, x) => s + x.thanh_tien, 0))}
            </div>`;
       };
     });
