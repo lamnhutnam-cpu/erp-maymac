@@ -9,13 +9,13 @@
      - Event delegation cho menu [data-page]
      - Bảng, modal form
      - Hàng đợi offline (localStorage) cho POST
-     - Thêm + Sửa + (tuỳ chọn) Xoá khách hàng
+     - Thêm + Sửa + Xoá khách hàng (cần GAS tương ứng)
    ============================================================ */
 
 /* ================== CONFIG ================== */
 // Nếu frontend và function cùng 1 site Netlify:
 const API_URL = "/.netlify/functions/gas";
-// Hoặc dùng URL GAS trực tiếp nếu chạy ngoài Netlify:
+// Nếu chạy ngoài Netlify, dùng URL GAS trực tiếp:
 // const API_URL = "https://script.google.com/macros/s/AKfy.../exec";
 
 /* ================== UTILS ================== */
@@ -39,6 +39,9 @@ const toObjects = (headers, rows) =>
     headers.forEach((h, i) => (o[h] = r[i]));
     return o;
   });
+
+// Ép số an toàn (bỏ dấu, chữ, VND…)
+const toNumber = (x) => Math.round(Number(String(x || "").replace(/[^\d.-]/g, "")) || 0);
 
 function renderTableArray(headers, data) {
   if (!data?.length) return `<div>—</div>`;
@@ -126,8 +129,7 @@ const state = {
   orders: [],
   orderLines: [],
   cacheAt: 0,
-  // Riêng Customers giữ lại danh sách để filter + edit nhanh
-  customers: [],
+  customers: [], // giữ lại để filter + edit nhanh
 };
 const CACHE_TTL = 60 * 1000;
 
@@ -164,19 +166,28 @@ async function loadOrders(invalidate = false) {
   state.cacheAt = now;
 }
 
+// CHỖ NÀY ĐÃ FIX: tự tính thành tiền nếu sheet chưa có
 async function loadOrderDetails(ma_don) {
   const rs = await apiGet("ChiTietDonHang");
   const rows = rs.ok ? rs.rows : [];
   if (!rows?.length) return [];
   const h = rows[0];
+
+  const get = (o, ...keys) => {
+    for (const k of keys) if (o[k] != null && o[k] !== "") return o[k];
+    return "";
+  };
+
   return toObjects(h, rows.slice(1))
-    .map((o) => ({
-      ma: o["Mã đơn"] || o["MaDon"] || "",
-      ten: o["Tên sản phẩm"] || o["TenSP"] || "",
-      so_luong: Number(o["Số lượng"] || o["SL"] || 0),
-      don_gia:  Number(o["Đơn giá"]   || o["DonGia"] || 0),
-      thanh_tien: Number(o["Thành tiền"] || o["ThanhTien"] || 0),
-    }))
+    .map((o) => {
+      const ma  = get(o, "Mã đơn", "MaDon");
+      const ten = get(o, "Tên sản phẩm", "TenSP", "Sản phẩm", "SanPham");
+      const sl  = toNumber(get(o, "Số lượng", "SL", "SoLuong"));
+      const dg  = toNumber(get(o, "Đơn giá", "DonGia"));
+      let tt    = toNumber(get(o, "Thành tiền", "ThanhTien"));
+      if (!tt) tt = sl * dg;
+      return { ma, ten, so_luong: sl, don_gia: dg, thanh_tien: tt };
+    })
     .filter((x) => x.ma === ma_don);
 }
 
@@ -297,10 +308,9 @@ async function pageCustomers() {
     cancel: $("#m-cancel"),
   };
 
-  let customers = [];         // dữ liệu đã load
-  let mode = "create";        // "create" | "edit"
+  let customers = [];
+  let mode = "create"; // "create" | "edit"
 
-  /* -------- helpers -------- */
   function clearForm() {
     form.ma.value = "";
     form.ten.value = "";
@@ -328,12 +338,10 @@ async function pageCustomers() {
       .join("")
       .toUpperCase()) || "KH";
 
-  /* -------- load & render -------- */
   async function loadCustomersData() {
     const rs = await apiGet("KhachHang");
     const rows = rs.ok ? rs.rows : [];
     if (!rows?.length) { customers = []; render(""); return; }
-
     const data = rows.slice(1).map((r) => ({
       ma:     r[0],
       ten:    r[1],
@@ -393,7 +401,6 @@ async function pageCustomers() {
       .join("");
   }
 
-  /* -------- events -------- */
   // Open add
   $("#kh-btn-add").onclick = () => {
     mode = "create";
@@ -432,7 +439,7 @@ async function pageCustomers() {
       rs = await safePost({ action: "createCustomer", data: payload });
     } else {
       rs = await safePost({
-        action: "updateCustomer",       // <-- GAS cần endpoint này
+        action: "updateCustomer",       // <-- Cần endpoint ở GAS
         data: { ma: form.ma.value, ...payload },
       });
     }
@@ -442,7 +449,8 @@ async function pageCustomers() {
     await loadCustomersData();
     toast(mode === "create"
       ? (rs.ok ? `Đã tạo KH ${rs.ma_kh || ""}` : "Đã lưu chờ (offline)")
-      : (rs.ok ? `Đã cập nhật KH ${form.ma.value}` : "Đã lưu chờ (offline)")
+      : (rs.ok ? `Đã cập nhật KH ${form.ma.value}` : "Đã lưu chờ (offline)"),
+      rs.ok ? "success" : "info"
     );
   };
 
@@ -472,16 +480,15 @@ async function pageCustomers() {
     if (act === "delete") {
       if (!confirm(`Xóa khách hàng ${row.ten} (${row.ma})?`)) return;
       const rs = await safePost({
-        action: "deleteCustomer",      // <-- GAS cần endpoint này
+        action: "deleteCustomer",      // <-- Cần endpoint ở GAS
         data: { ma: row.ma },
       });
       if (!rs.ok && !rs.queued) return alert(rs.error || "Không xóa được");
       await loadCustomersData();
-      toast(rs.ok ? "Đã xóa" : "Đã xếp hàng đợi (offline)");
+      toast(rs.ok ? "Đã xóa" : "Đã xếp hàng đợi (offline)", rs.ok ? "success" : "info");
     }
   });
 
-  // load lần đầu
   await loadCustomersData();
 }
 
@@ -693,12 +700,15 @@ async function pageOrdersView() {
           "Tên sản phẩm": d.ten,
           "Số lượng": d.so_luong,
           "Đơn giá": fmtVND(d.don_gia),
-          "Thành tiền": fmtVND(d.thanh_tien),
+          // luôn dùng giá trị đã tính (fallback nếu sheet rỗng)
+          "Thành tiền": fmtVND(d.thanh_tien || d.so_luong * d.don_gia),
         }));
+        const total = detail.reduce((s, x) => s + (x.thanh_tien || (x.so_luong * x.don_gia)), 0);
+
         $("#od-detail").innerHTML =
           renderTableArray(["Tên sản phẩm", "Số lượng", "Đơn giá", "Thành tiền"], rows) +
           `<div class="right" style="margin-top:8px;font-weight:700">
-            Tổng: ${fmtVND(detail.reduce((s, x) => s + x.thanh_tien, 0))}
+            Tổng: ${fmtVND(total)}
            </div>`;
       };
     });
