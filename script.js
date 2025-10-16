@@ -203,24 +203,19 @@ async function pageCustomers() {
   appEl().innerHTML = `
     <div class="page-head">
       <h1>Quản lý Khách hàng</h1>
-      <div class="actions">
-        <button class="chip success">🟩 PITC</button>
-        <button class="btn primary" data-page="order">🧾 Đơn hàng</button>
-        <button class="btn danger">🚪 Đăng xuất</button>
-      </div>
     </div>
 
     <div class="card">
       <div class="quick-3">
-        <button class="quick big" id="btn-open-add">
+        <button class="quick big" id="kh-btn-add">
           <div class="q-icon">👥➕</div>
           <div>Thêm khách hàng</div>
         </button>
         <div class="quick big">
           <div class="q-icon">🔎</div>
-          <div><input class="search w-full" id="kh-search" placeholder="Tìm tên, SĐT, email..."></div>
+          <div><input id="kh-search" class="search w-full" placeholder="Tìm tên, SĐT, email..."></div>
         </div>
-        <button class="quick big" id="btn-export">
+        <button class="quick big" id="kh-btn-export">
           <div class="q-icon">📊</div>
           <div>Xuất báo cáo</div>
         </button>
@@ -234,10 +229,12 @@ async function pageCustomers() {
       <div id="kh-list" class="kh-list"></div>
     </div>
 
-    <!-- Modal thêm/sửa -->
+    <!-- Modal Thêm/Sửa -->
     <div id="kh-modal" class="modal hidden">
       <div class="modal-body">
-        <h3 id="kh-modal-title">➕ Thêm khách hàng mới</h3>
+        <h3 id="kh-modal-title">➕ Thêm khách hàng</h3>
+
+        <input type="hidden" id="m-ma" />
 
         <div class="row">
           <div class="col">
@@ -273,10 +270,8 @@ async function pageCustomers() {
 
         <div>
           <label>Ghi chú khách hàng:</label>
-          <textarea id="m-ghichu" rows="3" placeholder="Ghi chú (không bắt buộc)"></textarea>
+          <textarea id="m-ghichu" rows="3" placeholder="Nhập ghi chú (không bắt buộc)"></textarea>
         </div>
-
-        <input id="m-makh" type="hidden"> <!-- dùng cho chế độ SỬA -->
 
         <div class="right" style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end">
           <button class="btn" id="m-cancel">Hủy</button>
@@ -286,190 +281,208 @@ async function pageCustomers() {
     </div>
   `;
 
-  // Modal helpers
-  const openModal  = () => $("#kh-modal").classList.remove("hidden");
-  const closeModal = () => $("#kh-modal").classList.add("hidden");
-  const setModeAdd = () => {
-    $("#kh-modal-title").textContent = "➕ Thêm khách hàng mới";
-    $("#m-makh").value = "";
-    $("#m-ten").value = "";
-    $("#m-loai").value = "";
-    $("#m-sdt").value = "";
-    $("#m-email").value = "";
-    $("#m-diachi").value = "";
-    $("#m-ghichu").value = "";
-  };
-  const setModeEdit = (row) => {
-    $("#kh-modal-title").textContent = `✏️ Sửa khách hàng (${row.ma})`;
-    $("#m-makh").value = row.ma;
-    $("#m-ten").value = row.ten || "";
-    $("#m-loai").value = row.loai || "";
-    $("#m-sdt").value = row.sdt || "";
-    $("#m-email").value = row.email || "";
-    $("#m-diachi").value = row.diachi || "";
-    $("#m-ghichu").value = row.ghichu || "";
+  const modal = $("#kh-modal");
+  const openModal  = () => modal.classList.remove("hidden");
+  const closeModal = () => modal.classList.add("hidden");
+  const form = {
+    ma:     $("#m-ma"),
+    ten:    $("#m-ten"),
+    loai:   $("#m-loai"),
+    sdt:    $("#m-sdt"),
+    email:  $("#m-email"),
+    diachi: $("#m-diachi"),
+    ghichu: $("#m-ghichu"),
+    title:  $("#kh-modal-title"),
+    save:   $("#m-save"),
+    cancel: $("#m-cancel"),
   };
 
-  $("#btn-open-add").onclick = () => { setModeAdd(); openModal(); };
-  $("#m-cancel").onclick    = closeModal;
-  $("#btn-export").onclick  = () => alert("Bạn có thể xuất bằng Google Sheets hoặc thêm sau.");
+  let customers = [];         // dữ liệu đã load
+  let mode = "create";        // "create" | "edit"
 
-  // Lưu (Thêm hoặc Sửa)
-  $("#m-save").onclick = async () => {
+  /* -------- helpers -------- */
+  function clearForm() {
+    form.ma.value = "";
+    form.ten.value = "";
+    form.loai.value = "";
+    form.sdt.value = "";
+    form.email.value = "";
+    form.diachi.value = "";
+    form.ghichu.value = "";
+  }
+  function fillForm(x) {
+    form.ma.value = x.ma || "";
+    form.ten.value = x.ten || "";
+    form.loai.value = x.loai || "";
+    form.sdt.value = x.sdt || "";
+    form.email.value = x.email || "";
+    form.diachi.value = x.diachi || "";
+    form.ghichu.value = x.ghichu || "";
+  }
+  const initials = (name) =>
+    (String(name || "")
+      .split(" ")
+      .filter(Boolean)
+      .slice(-2)
+      .map((s) => s[0])
+      .join("")
+      .toUpperCase()) || "KH";
+
+  /* -------- load & render -------- */
+  async function loadCustomersData() {
+    const rs = await apiGet("KhachHang");
+    const rows = rs.ok ? rs.rows : [];
+    if (!rows?.length) { customers = []; render(""); return; }
+
+    const data = rows.slice(1).map((r) => ({
+      ma:     r[0],
+      ten:    r[1],
+      loai:   r[2] || "",
+      sdt:    r[3] || "",
+      email:  r[4] || "",
+      diachi: r[5] || "",
+      ghichu: r[6] || "",
+    }));
+    customers = data;
+    render($("#kh-search").value || "");
+  }
+
+  function render(keyword = "") {
+    const k = (keyword || "").toLowerCase();
+    const list = k
+      ? customers.filter(
+          (x) =>
+            (x.ten || "").toLowerCase().includes(k) ||
+            (x.sdt || "").toLowerCase().includes(k) ||
+            (x.email || "").toLowerCase().includes(k)
+        )
+      : customers;
+
+    $("#kh-count").textContent = `Danh sách Khách hàng (${list.length})`;
+
+    if (!list.length) {
+      $("#kh-list").innerHTML = `<div class="muted">Chưa có dữ liệu</div>`;
+      return;
+    }
+
+    $("#kh-list").innerHTML = list
+      .map((x) => {
+        const badge = x.loai ? `<span class="badge gray">${x.loai}</span>` : "";
+        return `
+          <div class="kh-card" data-item="${x.ma}">
+            <div class="kh-left">
+              <div class="avatar">${initials(x.ten)}</div>
+              <div class="kh-info">
+                <div class="kh-name">${x.ten} <span class="muted">(${x.ma})</span> ${badge}</div>
+                <div class="kh-line">
+                  ${x.sdt   ? `<span>📞 ${x.sdt}</span>`   : ""}
+                  ${x.email ? `<span>✉️ ${x.email}</span>` : ""}
+                  ${x.diachi? `<span>📍 ${x.diachi}</span>`: ""}
+                </div>
+              </div>
+            </div>
+            <div class="kh-right">
+              <div class="kh-actions">
+                <button class="btn sm info"    data-act="detail" data-id="${x.ma}">Chi tiết</button>
+                <button class="btn sm primary" data-act="edit"   data-id="${x.ma}">Sửa</button>
+                <button class="btn sm danger"  data-act="delete" data-id="${x.ma}">Xóa</button>
+              </div>
+            </div>
+          </div>`;
+      })
+      .join("");
+  }
+
+  /* -------- events -------- */
+  // Open add
+  $("#kh-btn-add").onclick = () => {
+    mode = "create";
+    form.title.textContent = "➕ Thêm khách hàng";
+    form.save.textContent  = "Thêm khách hàng";
+    clearForm();
+    openModal();
+  };
+
+  // Export
+  $("#kh-btn-export").onclick = () =>
+    alert("Bạn có thể xuất trực tiếp trên Google Sheets, hoặc bổ sung sau.");
+
+  // Search
+  $("#kh-search").oninput = (e) => render(e.target.value || "");
+
+  // Cancel modal
+  form.cancel.onclick = closeModal;
+
+  // Save modal (create or edit)
+  form.save.onclick = async () => {
     const payload = {
-      ten:   $("#m-ten").value.trim(),
-      loai:  $("#m-loai").value.trim(),
-      sdt:   $("#m-sdt").value.trim(),
-      email: $("#m-email").value.trim(),
-      diachi:$("#m-diachi").value.trim(),
-      ghichu:$("#m-ghichu").value.trim(),
+      ten:    form.ten.value.trim(),
+      loai:   form.loai.value.trim(),
+      sdt:    form.sdt.value.trim(),
+      email:  form.email.value.trim(),
+      diachi: form.diachi.value.trim(),
+      ghichu: form.ghichu.value.trim(),
     };
     if (!payload.ten)  return alert("Vui lòng nhập Tên khách hàng");
     if (!payload.loai) return alert("Vui lòng chọn Loại khách hàng");
     if (!payload.sdt)  return alert("Vui lòng nhập Số điện thoại");
 
-    const ma_kh = $("#m-makh").value.trim();
-
-    // Nếu có mã KH → chế độ SỬA
-    if (ma_kh) {
-      // 🔔 CẦN API updateCustomer ở GAS:
-      // action: "updateCustomer", data: { ma, ten, loai, sdt, email, diachi, ghichu }
-      const rs = await safePost({ action: "updateCustomer", data: { ma: ma_kh, ...payload } });
-      if (!rs.ok && !rs.queued) return alert(rs.error || "Lỗi cập nhật");
-      closeModal();
-      alert(rs.ok ? `Đã cập nhật KH: ${ma_kh}` : "Đã lưu chờ đồng bộ (offline)");
+    let rs;
+    if (mode === "create") {
+      rs = await safePost({ action: "createCustomer", data: payload });
     } else {
-      // Tạo mới
-      const rs = await safePost({ action: "createCustomer", data: payload });
-      if (!rs.ok && !rs.queued) return alert(rs.error || "Lỗi lưu");
-      closeModal();
-      alert(rs.ok ? `Đã lưu KH: ${rs.ma_kh}` : "Đã lưu chờ đồng bộ (offline)");
+      rs = await safePost({
+        action: "updateCustomer",       // <-- GAS cần endpoint này
+        data: { ma: form.ma.value, ...payload },
+      });
     }
-    await loadList(); // refresh
+
+    if (!rs.ok && !rs.queued) return alert(rs.error || "Lỗi lưu");
+    closeModal();
+    await loadCustomersData();
+    toast(mode === "create"
+      ? (rs.ok ? `Đã tạo KH ${rs.ma_kh || ""}` : "Đã lưu chờ (offline)")
+      : (rs.ok ? `Đã cập nhật KH ${form.ma.value}` : "Đã lưu chờ (offline)")
+    );
   };
 
-  // Tải danh sách + render
-  async function loadList() {
-    const rs = await apiGet("KhachHang");
-    const rows = rs.ok ? rs.rows : [];
-    if (!rows?.length) {
-      $("#kh-list").innerHTML = `<div class="muted">Chưa có dữ liệu</div>`;
-      $("#kh-count").textContent = "Danh sách Khách hàng (0)";
-      state.customers = [];
-      return;
-    }
-    const data = rows.slice(1).map((r) => ({
-      ma: r[0],
-      ten: r[1],
-      loai: r[2] || "",
-      sdt: r[3] || "",
-      email: r[4] || "",
-      diachi: r[5] || "",
-      ghichu: r[6] || "",
-    }));
-    state.customers = data;
-    render("");
-  }
+  // Delegation: detail / edit / delete
+  document.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest(".kh-actions .btn");
+    if (!btn || !$("#kh-list").contains(btn)) return;
 
-  const render = (q = "") => {
-    const k = q.toLowerCase();
-    const arr = k
-      ? state.customers.filter(
-          (x) =>
-            (x.ma || "").toLowerCase().includes(k) ||
-            (x.ten || "").toLowerCase().includes(k) ||
-            (x.sdt || "").toLowerCase().includes(k) ||
-            (x.email || "").toLowerCase().includes(k)
-        )
-      : state.customers;
-
-    $("#kh-count").textContent = `Danh sách Khách hàng (${arr.length})`;
-
-    $("#kh-list").innerHTML = arr
-      .map((x) => {
-        const initials =
-          (x.ten || "")
-            .split(" ")
-            .filter(Boolean)
-            .slice(-2)
-            .map((s) => s[0])
-            .join("")
-            .toUpperCase() || "KH";
-        const debt = 0; // placeholder: liên kết bảng công nợ nếu có
-        const debtTag = debt > 0
-          ? `<span class="tag red">Nợ: ${debt.toLocaleString()} VND</span>`
-          : `<span class="tag green">Không nợ</span>`;
-        const typeBadge = x.loai ? `<span class="badge gray">${x.loai}</span>` : "";
-
-        return `
-        <div class="kh-card">
-          <div class="kh-left">
-            <div class="avatar">${initials}</div>
-            <div class="kh-info">
-              <div class="kh-name">${x.ten} <span class="muted">(${x.ma})</span> ${typeBadge}</div>
-              <div class="kh-line">
-                ${x.loai ? `<span>👤 ${x.loai}</span>` : ""}
-                ${x.sdt ? `<span>📞 ${x.sdt}</span>` : ""}
-                ${x.email ? `<span>✉️ ${x.email}</span>` : ""}
-                ${x.diachi ? `<span>📍 ${x.diachi}</span>` : ""}
-              </div>
-            </div>
-          </div>
-          <div class="kh-right">
-            <div class="kh-debt">${debtTag}</div>
-            <div class="kh-actions">
-              <button class="btn sm info"    data-act="detail" data-id="${x.ma}">Chi tiết</button>
-              <button class="btn sm primary" data-act="edit"   data-id="${x.ma}">Sửa</button>
-              <button class="btn sm danger"  data-act="delete" data-id="${x.ma}">Xóa</button>
-            </div>
-          </div>
-        </div>`;
-      })
-      .join("");
-  };
-
-  $("#kh-search").oninput = () => render($("#kh-search").value || "");
-  await loadList();
-
-  // Hành động (detail / edit / delete)
-  document.addEventListener("click", async (e) => {
-    const b = e.target.closest(".kh-actions .btn");
-    if (!b || !$("#kh-list").contains(b)) return;
-    const id = b.dataset.id;
-    const act = b.dataset.act;
-    const row = state.customers.find((x) => x.ma === id);
+    const id  = btn.dataset.id;
+    const act = btn.dataset.act;
+    const row = customers.find((x) => x.ma === id);
 
     if (act === "detail") {
       alert(
-        `Chi tiết KH ${row?.ma || id}\n` +
-        `• Tên: ${row?.ten || ""}\n` +
-        `• Loại: ${row?.loai || ""}\n` +
-        `• SĐT: ${row?.sdt || ""}\n` +
-        `• Email: ${row?.email || ""}\n` +
-        `• Địa chỉ: ${row?.diachi || ""}\n` +
-        `• Ghi chú: ${row?.ghichu || ""}`
+        `Mã: ${row.ma}\nTên: ${row.ten}\nLoại: ${row.loai}\nSĐT: ${row.sdt}\nEmail: ${row.email}\nĐịa chỉ: ${row.diachi}\nGhi chú: ${row.ghichu}`
       );
-      return;
     }
 
     if (act === "edit") {
-      if (!row) return;
-      setModeEdit(row);
+      mode = "edit";
+      form.title.textContent = "✏️ Sửa khách hàng";
+      form.save.textContent  = "Cập nhật";
+      fillForm(row);
       openModal();
-      return;
     }
 
     if (act === "delete") {
-      if (!confirm(`Xóa khách hàng ${id}?`)) return;
-      // 🔔 CẦN API deleteCustomer ở GAS:
-      // action: "deleteCustomer", data: { ma }
-      const rs = await safePost({ action: "deleteCustomer", data: { ma: id } });
-      if (!rs.ok && !rs.queued) return alert(rs.error || "Xóa không thành công");
-      alert(rs.ok ? "Đã xóa!" : "Đã xếp hàng đợi (offline)");
-      await loadList();
-      return;
+      if (!confirm(`Xóa khách hàng ${row.ten} (${row.ma})?`)) return;
+      const rs = await safePost({
+        action: "deleteCustomer",      // <-- GAS cần endpoint này
+        data: { ma: row.ma },
+      });
+      if (!rs.ok && !rs.queued) return alert(rs.error || "Không xóa được");
+      await loadCustomersData();
+      toast(rs.ok ? "Đã xóa" : "Đã xếp hàng đợi (offline)");
     }
   });
+
+  // load lần đầu
+  await loadCustomersData();
 }
 
 /* ---------- PRODUCT ---------- */
