@@ -1,12 +1,10 @@
 /* ===================================================================
-   ERP MAY MẶC – SPA Frontend
+   ERP MAY MẶC – SPA Frontend (có công nợ khi tạo hóa đơn)
    =================================================================== */
 
 /* =============== CONFIG =============== */
-// Nếu chạy chung site Netlify:
-const API_URL = "/.netlify/functions/gas";
-// Hoặc dùng trực tiếp GAS (nếu không qua Netlify):
-// const API_URL = "https://script.google.com/macros/s/XXXXX/exec";
+const API_URL = "/.netlify/functions/gas"; // proxy Netlify tới GAS
+// const API_URL = "https://script.google.com/macros/s/XXXX/exec"; // dùng trực tiếp nếu không qua Netlify
 
 /* =============== HELPERS =============== */
 const $  = (s, el = document) => el.querySelector(s);
@@ -22,19 +20,15 @@ const todayStr = () => {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${y}/${m}/${dd}`;
 };
-
 const toObjects = (headers, rows) => rows.map(r => {
-  const o = {};
-  headers.forEach((h, i) => (o[h] = r[i]));
-  return o;
+  const o = {}; headers.forEach((h, i) => (o[h] = r[i])); return o;
 });
-
 function renderTableArray(headers, data) {
   if (!data?.length) return `<div class="muted">—</div>`;
   let html = `<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>`;
   data.forEach(row => {
     html += `<tr>${headers.map(h=>{
-      const right = /SL|Số lượng|Đơn giá|Thành tiền|Tổng|Ton|Gia|Amount|Qty/i.test(h) ? ' class="right"' : "";
+      const right = /SL|Số lượng|Đơn giá|Thành tiền|Tổng|Ton|Gia|Amount|Qty|Nợ|Trả/i.test(h) ? ' class="right"' : "";
       return `<td${right}>${row[h] ?? ""}</td>`;
     }).join("")}</tr>`;
   });
@@ -45,7 +39,7 @@ function renderTableArray(headers, data) {
 /* =============== API =============== */
 async function apiGet(sheet) {
   const res = await fetch(`${API_URL}?sheet=${encodeURIComponent(sheet)}`);
-  return res.json(); // {ok, rows}
+  return res.json();
 }
 async function apiPost(body) {
   const res = await fetch(API_URL, {
@@ -53,14 +47,20 @@ async function apiPost(body) {
     headers: { "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify(body),
   });
-  return res.json(); // {ok, ...}
+  return res.json();
+}
+/* Công nợ: hỏi nợ hiện tại của 1 khách. Nếu backend chưa có action này -> trả 0 */
+async function getDebt(khach) {
+  try {
+    const r = await apiPost({ action: "getDebt", khach });
+    return r?.ok ? Number(r.debt || 0) : 0;
+  } catch { return 0; }
 }
 
 /* =============== OFFLINE QUEUE =============== */
 const SYNC_KEY = "erp_sync_queue_v2";
 const getQueue = () => JSON.parse(localStorage.getItem(SYNC_KEY) || "[]");
 const setQueue = (q) => localStorage.setItem(SYNC_KEY, JSON.stringify(q));
-
 function toast(msg, type="info") {
   const t = document.createElement("div");
   Object.assign(t.style, {
@@ -72,7 +72,6 @@ function toast(msg, type="info") {
   t.textContent = msg; document.body.appendChild(t);
   setTimeout(()=> t.remove(), 2200);
 }
-
 async function safePost(body) {
   try {
     const r = await apiPost(body);
@@ -84,8 +83,6 @@ async function safePost(body) {
     return { ok:false, queued:true };
   }
 }
-
-// Đồng bộ mỗi 5s
 setInterval(async () => {
   const q = getQueue(); if (!q.length) return;
   try {
@@ -118,15 +115,12 @@ async function loadProducts(invalidate=false) {
   }));
   state.cacheAt = now;
 }
-
 async function loadCustomers() {
   const rs = await apiGet("KhachHang"); const rows = rs.ok?rs.rows:[];
-  if (!rows?.length) { state.customers=[]; return; }
-  state.customers = rows.slice(1).map(r => ({
+  state.customers = rows?.length ? rows.slice(1).map(r=>({
     ma:r[0], ten:r[1], loai:r[2]||"", sdt:r[3]||"", email:r[4]||"", diachi:r[5]||"", ghichu:r[6]||""
-  }));
+  })) : [];
 }
-
 async function loadOrders(invalidate=false) {
   const now = Date.now();
   if (!invalidate && state.orders.length && now-state.cacheAt<CACHE_TTL) return;
@@ -134,12 +128,15 @@ async function loadOrders(invalidate=false) {
   if (!rows?.length) { state.orders=[]; return; }
   const h = rows[0];
   state.orders = toObjects(h, rows.slice(1)).map(o => ({
-    ma:o["Mã đơn"]||o["MaDon"]||"", khach:o["Khách hàng"]||o["KhachHang"]||"",
-    ngay:o["Ngày tạo"]||o["NgayTao"]||"", tong:Number(o["Tổng tiền"]||o["TongTien"]||0)
+    ma:o["Mã đơn"]||o["MaDon"]||"",
+    khach:o["Khách hàng"]||o["KhachHang"]||"",
+    ngay:o["Ngày tạo"]||o["NgayTao"]||"",
+    tong:Number(o["Tổng tiền"]||o["TongTien"]||0),
+    paid:Number(o["Khách trả"]||o["KhachTra"]||0),
+    debt_after:Number(o["Còn nợ"]||o["ConNo"]||0),
   }));
   state.cacheAt = now;
 }
-
 async function loadOrderDetails(ma) {
   const rs = await apiGet("ChiTietDonHang"); const rows = rs.ok?rs.rows:[];
   if (!rows?.length) return [];
@@ -209,16 +206,13 @@ async function pageCustomers() {
   const modal = $("#kh-modal");
   const openModal = ()=> modal.classList.remove("hidden");
   const closeModal = ()=> modal.classList.add("hidden");
-  const f = {
-    ma:$("#m-ma"), ten:$("#m-ten"), loai:$("#m-loai"), sdt:$("#m-sdt"),
-    email:$("#m-email"), diachi:$("#m-diachi"), ghichu:$("#m-ghichu"),
-    title:$("#kh-title"), save:$("#m-save"), cancel:$("#m-cancel"),
-  };
+  const f = { ma:$("#m-ma"), ten:$("#m-ten"), loai:$("#m-loai"), sdt:$("#m-sdt"), email:$("#m-email"), diachi:$("#m-diachi"), ghichu:$("#m-ghichu"), title:$("#kh-title"), save:$("#m-save"), cancel:$("#m-cancel") };
   let mode = "create";
-
   const initials = name => (String(name||"").split(" ").filter(Boolean).slice(-2).map(s=>s[0]).join("").toUpperCase()) || "KH";
 
-  function renderList(keyword="") {
+  await loadCustomers(); render("");
+
+  function render(keyword="") {
     const k = keyword.toLowerCase();
     const list = k ? state.customers.filter(x =>
       (x.ten||"").toLowerCase().includes(k) ||
@@ -253,49 +247,36 @@ async function pageCustomers() {
     `).join("");
   }
 
-  // Load data lần đầu
-  await loadCustomers(); renderList();
-
-  // Events
-  $("#kh-search").oninput = e => renderList(e.target.value || "");
-  $("#kh-export").onclick = () => alert("Xuất trực tiếp từ Google Sheets (sẽ bổ sung sau).");
+  $("#kh-search").oninput = e => render(e.target.value || "");
+  $("#kh-export").onclick = () => alert("Xuất trực tiếp từ Google Sheets (bổ sung sau).");
 
   $("#kh-add").onclick = () => {
     mode = "create";
     f.title.textContent = "➕ Thêm khách hàng";
-    f.save.textContent = "Thêm khách hàng";
+    f.save.textContent  = "Thêm khách hàng";
     f.ma.value = f.ten.value = f.loai.value = f.sdt.value = f.email.value = f.diachi.value = f.ghichu.value = "";
     openModal();
   };
-
   f.cancel.onclick = closeModal;
 
   f.save.onclick = async () => {
-    const payload = {
-      ten:f.ten.value.trim(), loai:f.loai.value.trim(), sdt:f.sdt.value.trim(),
-      email:f.email.value.trim(), diachi:f.diachi.value.trim(), ghichu:f.ghichu.value.trim(),
-    };
+    const payload = { ten:f.ten.value.trim(), loai:f.loai.value.trim(), sdt:f.sdt.value.trim(), email:f.email.value.trim(), diachi:f.diachi.value.trim(), ghichu:f.ghichu.value.trim() };
     if (!payload.ten)  return alert("Vui lòng nhập Tên");
     if (!payload.loai) return alert("Vui lòng chọn Loại");
     if (!payload.sdt)  return alert("Vui lòng nhập SĐT");
 
     let rs;
-    if (mode==="create") {
-      rs = await safePost({ action:"createCustomer", data: payload });
-    } else {
-      rs = await safePost({ action:"updateCustomer", data:{ ma:f.ma.value, ...payload }});
-    }
-    if (!rs.ok && !rs.queued) return alert(rs.error || "Lỗi lưu");
+    if (mode==="create") rs = await safePost({ action:"createCustomer", data: payload });
+    else rs = await safePost({ action:"updateCustomer", data:{ ma:f.ma.value, ...payload }});
 
-    closeModal();
-    await loadCustomers(); renderList();
+    if (!rs.ok && !rs.queued) return alert(rs.error || "Lỗi lưu");
+    closeModal(); await loadCustomers(); render($("#kh-search").value || "");
     toast(mode==="create" ? (rs.ok?`Đã tạo KH ${rs.ma_kh||""}`:"Đã lưu chờ") : (rs.ok?"Đã cập nhật":"Đã lưu chờ"), "success");
   };
 
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest(".kh-actions .btn");
     if (!b || !$("#kh-list").contains(b)) return;
-
     const id = b.dataset.id;
     const row = state.customers.find(x=>x.ma===id);
     const act = b.dataset.act;
@@ -312,15 +293,14 @@ Ghi chú: ${row.ghichu}`);
     if (act==="edit") {
       mode="edit";
       f.title.textContent="✏️ Sửa khách hàng"; f.save.textContent="Cập nhật";
-      f.ma.value=row.ma; f.ten.value=row.ten; f.loai.value=row.loai; f.sdt.value=row.sdt;
-      f.email.value=row.email; f.diachi.value=row.diachi; f.ghichu.value=row.ghichu;
+      f.ma.value=row.ma; f.ten.value=row.ten; f.loai.value=row.loai; f.sdt.value=row.sdt; f.email.value=row.email; f.diachi.value=row.diachi; f.ghichu.value=row.ghichu;
       openModal();
     }
     if (act==="delete") {
       if (!confirm(`Xóa khách hàng ${row.ten} (${row.ma})?`)) return;
       const rs = await safePost({ action:"deleteCustomer", data:{ ma:row.ma }});
       if (!rs.ok && !rs.queued) return alert(rs.error || "Không xóa được");
-      await loadCustomers(); renderList(); toast(rs.ok?"Đã xóa":"Đã xếp hàng đợi", "success");
+      await loadCustomers(); render($("#kh-search").value || ""); toast(rs.ok?"Đã xóa":"Đã xếp hàng đợi", "success");
     }
   });
 }
@@ -360,7 +340,7 @@ async function pageProduct() {
   }
 }
 
-/* ---- Order (create) ---- */
+/* ---- Order (create) — có công nợ ---- */
 async function pageOrder() {
   toggleShell(false);
 
@@ -368,7 +348,7 @@ async function pageOrder() {
     <div class="card">
       <h2>🧾 Tạo đơn hàng</h2>
       <div class="row">
-        <div class="col"><label>Khách hàng</label><input id="dh-khach"></div>
+        <div class="col"><label>Khách hàng</label><input id="dh-khach" placeholder="Tên KH"></div>
         <div class="col"><label>Ngày</label><input id="dh-ngay" value="${todayStr()}"></div>
       </div>
       <div class="row">
@@ -387,8 +367,20 @@ async function pageOrder() {
 
     <div class="card">
       <h3>📋 Sản phẩm trong đơn</h3>
-      <div id="dh-lines"></div>
-      <div class="right" id="dh-total" style="margin-top:8px;font-weight:700"></div>
+      <div id="dh-lines">Chưa có dòng</div>
+
+      <div class="row" style="margin-top:10px">
+        <div class="col"><label>Khách trả (VND)</label><input id="dh-paid" type="number" value="0"></div>
+        <div class="col"><label>Ghi chú</label><input id="dh-note" placeholder="ghi chú..."></div>
+      </div>
+
+      <div style="margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div class="muted">🧮 Tổng tạm tính: <b id="dh-sum">0 VND</b></div>
+        <div class="muted right">📦 Nợ cũ: <b id="dh-old-debt">0 VND</b></div>
+        <div class="muted">💵 Khách trả: <b id="dh-paid-show">0 VND</b></div>
+        <div class="muted right">🧾 Còn nợ sau HĐ: <b id="dh-debt-after">0 VND</b></div>
+      </div>
+
       <div style="margin-top:10px"><button class="primary" id="btn-save-order" disabled>✅ Lưu đơn</button></div>
     </div>
   `;
@@ -398,9 +390,20 @@ async function pageOrder() {
   sel.innerHTML = (state.products||[]).map(p =>
     `<option value="${p["Tên sản phẩm"]}" data-gia="${p["Giá"]}">${p["Tên sản phẩm"]} — ${fmtVND(p["Giá"])}</option>`
   ).join("");
-
   const syncPrice = () => { $("#dh-gia").value = sel.selectedOptions[0]?.getAttribute("data-gia") || 0; };
   syncPrice(); sel.onchange = syncPrice;
+
+  let oldDebt = 0;
+  let sum = 0;
+
+  async function refreshDebt() {
+    const kh = $("#dh-khach").value.trim();
+    if (!kh) { oldDebt = 0; updateTotals(); return; }
+    oldDebt = await getDebt(kh); // nếu backend chưa có -> 0
+    updateTotals();
+  }
+  $("#dh-khach").addEventListener("change", refreshDebt);
+  $("#dh-khach").addEventListener("blur", refreshDebt);
 
   $("#btn-add-line").onclick = () => {
     const ten = $("#dh-sp").value;
@@ -411,30 +414,58 @@ async function pageOrder() {
     renderLines();
   };
   $("#btn-clear-lines").onclick = () => { state.orderLines=[]; renderLines(); };
+  $("#dh-paid").oninput = updateTotals;
+
   $("#btn-save-order").onclick = async () => {
     const khach = $("#dh-khach").value.trim();
     const ngay  = $("#dh-ngay").value.trim();
+    const paid  = Number($("#dh-paid").value || 0);
+    const note  = $("#dh-note").value.trim();
     if (!khach || !ngay || !state.orderLines.length) return;
+
+    const total = state.orderLines.reduce((s,x)=>s+x["Thành tiền"],0);
+    const debt_after = oldDebt + total - paid;
+
     const details = state.orderLines.map(x=>({ ten:x["Tên"], so_luong:x["Số lượng"], don_gia:x["Đơn giá"] }));
-    const rs = await safePost({ action:"createOrder", order:{ khach, ngay }, details });
-    alert(rs.ok?`Đã lưu ${rs.ma_don}`:"Đã lưu chờ (offline)");
-    state.orderLines=[]; renderLines();
+
+    const rs = await safePost({
+      action: "createOrder",
+      order: {
+        khach, ngay, total, paid,
+        debt_before: oldDebt, debt_after,
+        note
+      },
+      details
+    });
+    alert(rs.ok ? `Đã lưu ${rs.ma_don}` : "Đã lưu chờ (offline)");
+    state.orderLines=[]; oldDebt=0; $("#dh-khach").value=""; $("#dh-paid").value=0; $("#dh-note").value="";
+    renderLines();
   };
 
   renderLines();
+
+  function updateTotals() {
+    sum = state.orderLines.reduce((s,x)=>s+x["Thành tiền"],0);
+    const paid = Number($("#dh-paid").value || 0);
+    const debt_after = oldDebt + sum - paid;
+    $("#dh-sum").textContent = fmtVND(sum);
+    $("#dh-old-debt").textContent = fmtVND(oldDebt);
+    $("#dh-paid-show").textContent = fmtVND(paid);
+    $("#dh-debt-after").textContent = fmtVND(debt_after);
+  }
   function renderLines() {
     if (!state.orderLines.length) {
       $("#dh-lines").innerHTML = "Chưa có dòng";
-      $("#btn-save-order").disabled = true; $("#dh-total").innerHTML = ""; return;
+      $("#btn-save-order").disabled = true;
+      updateTotals(); return;
     }
     $("#dh-lines").innerHTML = renderTableArray(["Tên","Số lượng","Đơn giá","Thành tiền"], state.orderLines);
-    const total = state.orderLines.reduce((s,x)=>s+x["Thành tiền"],0);
-    $("#dh-total").innerHTML = `🧮 Tổng tạm tính: <b>${fmtVND(total)}</b>`;
     $("#btn-save-order").disabled = false;
+    updateTotals();
   }
 }
 
-/* ---- Orders view ---- */
+/* ---- Orders view (Chi tiết có tổng) ---- */
 async function pageOrdersView() {
   toggleShell(false);
 
@@ -456,18 +487,21 @@ async function pageOrdersView() {
   await loadOrders(); render();
 
   function render() {
-    const q = ($("#od-search").value||"").toLowerCase();
+    const q = ($("#od-search").value || "").toLowerCase();
     const data = q ? state.orders.filter(o =>
       (o.ma||"").toLowerCase().includes(q) || (o.khach||"").toLowerCase().includes(q)
     ) : state.orders;
 
     let html = `<table><thead><tr>
-      <th>Mã đơn</th><th>Khách hàng</th><th>Ngày</th><th class="right">Tổng</th><th></th>
+      <th>Mã đơn</th><th>Khách hàng</th><th>Ngày</th>
+      <th class="right">Tổng</th><th class="right">Khách trả</th><th class="right">Còn nợ</th><th></th>
     </tr></thead><tbody>`;
     data.forEach(o => {
       html += `<tr>
         <td>${o.ma}</td><td>${o.khach}</td><td>${o.ngay}</td>
         <td class="right">${fmtVND(o.tong)}</td>
+        <td class="right">${fmtVND(o.paid)}</td>
+        <td class="right">${fmtVND(o.debt_after)}</td>
         <td><button data-view="${o.ma}">Chi tiết</button></td>
       </tr>`;
     });
@@ -479,15 +513,22 @@ async function pageOrdersView() {
         const ma = btn.getAttribute("data-view");
         const detail = await loadOrderDetails(ma);
         if (!detail.length) { $("#od-detail").innerHTML = "Không có chi tiết."; return; }
-        const rows = detail.map(d=>({
-          "Tên sản phẩm": d.ten, "Số lượng": d.so_luong,
-          "Đơn giá": fmtVND(d.don_gia), "Thành tiền": fmtVND(d.thanh_tien),
-        }));
+
+        // Nếu cột "Thành tiền" trả 0, tự tính từ SL*Đơn giá
+        const rows = detail.map(d=>{
+          const tt = d.thanh_tien>0 ? d.thanh_tien : (d.so_luong * d.don_gia);
+          return {
+            "Tên sản phẩm": d.ten,
+            "Số lượng": d.so_luong,
+            "Đơn giá": fmtVND(d.don_gia),
+            "Thành tiền": fmtVND(tt),
+          };
+        });
+        const total = detail.reduce((s, x) => s + (x.thanh_tien>0 ? x.thanh_tien : x.so_luong*x.don_gia), 0);
+
         $("#od-detail").innerHTML =
           renderTableArray(["Tên sản phẩm","Số lượng","Đơn giá","Thành tiền"], rows) +
-          `<div class="right" style="margin-top:8px;font-weight:700">
-            Tổng: ${fmtVND(detail.reduce((s,x)=>s+x.thanh_tien,0))}
-          </div>`;
+          `<div class="right" style="margin-top:8px;font-weight:700">Tổng: ${fmtVND(total)}</div>`;
       };
     });
   }
@@ -582,10 +623,7 @@ async function pageTimesheet() {
     </div>
   `;
   $("#btn-cc").onclick = async () => {
-    const d = {
-      Ngay:$("#cc-ngay").value, MaCN:$("#cc-macn").value, TenCN:$("#cc-tencn").value,
-      MaLenh:$("#cc-molenh").value, CongDoan:$("#cc-cd").value, SL:Number($("#cc-sl").value||0),
-    };
+    const d = { Ngay:$("#cc-ngay").value, MaCN:$("#cc-macn").value, TenCN:$("#cc-tencn").value, MaLenh:$("#cc-molenh").value, CongDoan:$("#cc-cd").value, SL:Number($("#cc-sl").value||0) };
     const rs = await safePost({ action:"recordTimesheet", data:d });
     alert(rs.ok?"Đã ghi công!":"Đã lưu chờ (offline)");
   };
@@ -612,11 +650,7 @@ async function pagePayroll() {
 }
 
 /* =============== ROUTER =============== */
-function setActive(page) {
-  $$(".menu-item,[data-page]").forEach(el=>{
-    if (el.dataset?.page) el.classList.toggle("active", el.dataset.page===page);
-  });
-}
+function setActive(page) { $$(".menu-item,[data-page]").forEach(el=>{ if (el.dataset?.page) el.classList.toggle("active", el.dataset.page===page); }); }
 async function loadPage(page) {
   setActive(page);
   if (page==="overview") { toggleShell(true); return pageOverview(); }
@@ -636,7 +670,6 @@ document.addEventListener("click", (e)=>{
   const el = e.target.closest("[data-page]"); if (!el) return;
   e.preventDefault(); const page = el.dataset.page; if (page) loadPage(page);
 });
-
 window.addEventListener("DOMContentLoaded", ()=>{
   if (!$("#app")) { const m=document.createElement("main"); m.id="app"; document.body.appendChild(m); }
   toggleShell(true); loadPage("overview");
