@@ -6,8 +6,8 @@
    - Orders: giữ như phiên bản trước (NoCu + nhiều payments)
 =================================================================== */
 
-const API_URL = "/.netlify/functions/gas";
 
+const API_URL = "https://script.google.com/macros/s/AKfycbxwqsLUuVr3O4tygVy1z39lfe5tHWG-FQs4kvEHHIAf6yFMOwCE2FgaOY2SZKIfqh0/exec";
 /* =============== HELPERS =============== */
 const $  = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
@@ -766,3 +766,4 @@ window.addEventListener("DOMContentLoaded", ()=>{
   if (!$("#app")) { const m=document.createElement("main"); m.id="app"; document.body.appendChild(m); }
   toggleShell(true); loadPage("overview");
 });
+
