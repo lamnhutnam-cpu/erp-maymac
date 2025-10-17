@@ -1,5 +1,5 @@
 /* ===================================================================
-   ERP MAY MẶC – SPA Frontend (có công nợ khi tạo hóa đơn)
+   ERP MAY MẶC – SPA Frontend (có công nợ & nhiều dòng Khách trả)
    =================================================================== */
 
 /* =============== CONFIG =============== */
@@ -97,6 +97,7 @@ const state = {
   orders: [],
   customers: [],
   orderLines: [],
+  payments: [],         // << NHIỀU DÒNG KHÁCH TRẢ
   cacheAt: 0,
 };
 const CACHE_TTL = 60 * 1000;
@@ -340,7 +341,7 @@ async function pageProduct() {
   }
 }
 
-/* ---- Order (create) — có công nợ ---- */
+/* ---- Order (create) — có công nợ & nhiều dòng KHÁCH TRẢ ---- */
 async function pageOrder() {
   toggleShell(false);
 
@@ -349,19 +350,19 @@ async function pageOrder() {
       <h2>🧾 Tạo đơn hàng</h2>
       <div class="row">
         <div class="col"><label>Khách hàng</label><input id="dh-khach" placeholder="Tên KH"></div>
-        <div class="col"><label>Ngày</label><input id="dh-ngay" value="${todayStr()}"></div>
+        <div class="col"><label>Ngày</label><input id="dh-ngay" value="\${todayStr()}"></div>
       </div>
+
       <div class="row">
         <div class="col"><label>Sản phẩm</label><select id="dh-sp"></select></div>
         <div class="col"><label>Số lượng</label><input id="dh-sl" type="number" value="1"></div>
       </div>
       <div class="row">
         <div class="col"><label>Đơn giá</label><input id="dh-gia" type="number" value="0"></div>
-        <div class="col"></div>
-      </div>
-      <div style="margin-top:10px">
-        <button class="primary" id="btn-add-line">➕ Thêm vào đơn</button>
-        <button class="danger" id="btn-clear-lines" style="margin-left:8px">🗑 Xoá</button>
+        <div class="col" style="display:flex;align-items:flex-end;gap:8px">
+          <button class="primary" id="btn-add-line">➕ Thêm vào đơn</button>
+          <button class="danger" id="btn-clear-lines">🗑 Xoá</button>
+        </div>
       </div>
     </div>
 
@@ -369,15 +370,23 @@ async function pageOrder() {
       <h3>📋 Sản phẩm trong đơn</h3>
       <div id="dh-lines">Chưa có dòng</div>
 
+      <div class="subcard" style="margin-top:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <h3>💵 Khách trả (nhiều dòng)</h3>
+          <button class="primary" id="btn-add-pay">+ Thêm dòng</button>
+        </div>
+        <div id="pay-rows" style="margin-top:8px"></div>
+      </div>
+
       <div class="row" style="margin-top:10px">
-        <div class="col"><label>Khách trả (VND)</label><input id="dh-paid" type="number" value="0"></div>
         <div class="col"><label>Ghi chú</label><input id="dh-note" placeholder="ghi chú..."></div>
+        <div class="col"></div>
       </div>
 
       <div style="margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
         <div class="muted">🧮 Tổng tạm tính: <b id="dh-sum">0 VND</b></div>
         <div class="muted right">📦 Nợ cũ: <b id="dh-old-debt">0 VND</b></div>
-        <div class="muted">💵 Khách trả: <b id="dh-paid-show">0 VND</b></div>
+        <div class="muted">💵 Tổng khách trả: <b id="dh-paid-show">0 VND</b></div>
         <div class="muted right">🧾 Còn nợ sau HĐ: <b id="dh-debt-after">0 VND</b></div>
       </div>
 
@@ -385,6 +394,7 @@ async function pageOrder() {
     </div>
   `;
 
+  // Load sản phẩm
   await loadProducts();
   const sel = $("#dh-sp");
   sel.innerHTML = (state.products||[]).map(p =>
@@ -393,18 +403,21 @@ async function pageOrder() {
   const syncPrice = () => { $("#dh-gia").value = sel.selectedOptions[0]?.getAttribute("data-gia") || 0; };
   syncPrice(); sel.onchange = syncPrice;
 
+  // State cục bộ
   let oldDebt = 0;
   let sum = 0;
 
+  // Nợ cũ theo KH
   async function refreshDebt() {
     const kh = $("#dh-khach").value.trim();
     if (!kh) { oldDebt = 0; updateTotals(); return; }
-    oldDebt = await getDebt(kh); // nếu backend chưa có -> 0
+    oldDebt = await getDebt(kh);
     updateTotals();
   }
   $("#dh-khach").addEventListener("change", refreshDebt);
   $("#dh-khach").addEventListener("blur", refreshDebt);
 
+  // Hàng hóa
   $("#btn-add-line").onclick = () => {
     const ten = $("#dh-sp").value;
     const sl  = Number($("#dh-sl").value || 0);
@@ -414,39 +427,78 @@ async function pageOrder() {
     renderLines();
   };
   $("#btn-clear-lines").onclick = () => { state.orderLines=[]; renderLines(); };
-  $("#dh-paid").oninput = updateTotals;
 
+  // Thanh toán nhiều dòng
+  function addPaymentRow(amount=0, note="") {
+    state.payments.push({ amount:Number(amount)||0, note:String(note)||"" });
+    renderPayments();
+  }
+  function removePaymentRow(i){ state.payments.splice(i,1); renderPayments(); }
+  function paymentsSum(){ return (state.payments||[]).reduce((s,p)=> s + Number(p.amount||0), 0); }
+
+  $("#btn-add-pay").onclick = () => addPaymentRow();
+
+  function renderPayments(){
+    const wrap = $("#pay-rows");
+    if (!state.payments.length) { wrap.innerHTML = `<div class="muted">Chưa có dòng thanh toán</div>`; updateTotals(); return; }
+    wrap.innerHTML = state.payments.map((p,idx)=>`
+      <div class="row" data-pay="${idx}">
+        <div class="col"><input type="number" min="0" value="${p.amount}" placeholder="Số tiền (VND)"></div>
+        <div class="col" style="display:flex;gap:8px">
+          <input value="${p.note||""}" placeholder="Ghi chú (tiền mặt/chuyển khoản/...)">
+          <button class="danger" data-del="${idx}">Xóa</button>
+        </div>
+      </div>
+    `).join("");
+
+    // bind events
+    $$("#pay-rows [data-pay]").forEach(row=>{
+      const idx = Number(row.dataset.pay);
+      const inputs = $$("input", row);
+      inputs[0].oninput = e => { state.payments[idx].amount = Number(e.target.value||0); updateTotals(); };
+      inputs[1].oninput = e => { state.payments[idx].note   = e.target.value; };
+    });
+    $$("#pay-rows [data-del]").forEach(btn=>{
+      btn.onclick = () => removePaymentRow(Number(btn.dataset.del));
+    });
+    updateTotals();
+  }
+
+  // Lưu đơn
   $("#btn-save-order").onclick = async () => {
     const khach = $("#dh-khach").value.trim();
     const ngay  = $("#dh-ngay").value.trim();
-    const paid  = Number($("#dh-paid").value || 0);
     const note  = $("#dh-note").value.trim();
     if (!khach || !ngay || !state.orderLines.length) return;
 
     const total = state.orderLines.reduce((s,x)=>s+x["Thành tiền"],0);
+    const paid  = paymentsSum();
     const debt_after = oldDebt + total - paid;
 
     const details = state.orderLines.map(x=>({ ten:x["Tên"], so_luong:x["Số lượng"], don_gia:x["Đơn giá"] }));
+    const payments = state.payments.map(p=> ({ so_tien:Number(p.amount||0), ghi_chu:p.note||"" }));
 
     const rs = await safePost({
       action: "createOrder",
-      order: {
-        khach, ngay, total, paid,
-        debt_before: oldDebt, debt_after,
-        note
-      },
-      details
+      order: { khach, ngay, total, paid, debt_before: oldDebt, debt_after, note },
+      details,
+      payments // << gửi từng khoản khách trả
     });
+
     alert(rs.ok ? `Đã lưu ${rs.ma_don}` : "Đã lưu chờ (offline)");
-    state.orderLines=[]; oldDebt=0; $("#dh-khach").value=""; $("#dh-paid").value=0; $("#dh-note").value="";
-    renderLines();
+    // reset
+    state.orderLines=[]; state.payments=[]; oldDebt=0;
+    $("#dh-khach").value=""; $("#dh-note").value="";
+    renderLines(); renderPayments();
   };
 
-  renderLines();
+  // render ban đầu
+  renderLines(); renderPayments();
 
+  // helpers render
   function updateTotals() {
     sum = state.orderLines.reduce((s,x)=>s+x["Thành tiền"],0);
-    const paid = Number($("#dh-paid").value || 0);
+    const paid = paymentsSum();
     const debt_after = oldDebt + sum - paid;
     $("#dh-sum").textContent = fmtVND(sum);
     $("#dh-old-debt").textContent = fmtVND(oldDebt);
@@ -615,7 +667,7 @@ async function pageTimesheet() {
       </div>
       <div class="row">
         <div class="col"><label>Công đoạn</label>
-          <select id="cc-cd">${cds.map(c=>`<option>${c["TenCD"]||c["Tên CD"]||c["Tên công đoạn"]||""}</option>`)}</select>
+          <select id="cc-cd">${cds.map(c=>`<option>${c["TenCD"]||c["Tên CD"]||c["Tên công đoạn"]||""}</option>`).join("")}</select>
         </div>
         <div class="col"><label>SL</label><input id="cc-sl" type="number" value="10"></div>
       </div>
