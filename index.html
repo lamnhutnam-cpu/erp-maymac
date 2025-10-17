@@ -24,13 +24,19 @@
 
     <div class="menu-group">
       <div class="menu-title">QUẢN LÝ CƠ BẢN</div>
+      <a class="menu-item" data-page="customers">👤 Khách hàng</a>
+      <a class="menu-item" data-page="suppliers">🏭 Nhà cung cấp</a>
       <a class="menu-item" data-page="product">📦 Sản phẩm</a>
+      <a class="menu-item" data-page="categories">🗂 Danh mục</a>
+      <a class="menu-item" data-page="inventory">📦 Kho hàng</a>
     </div>
 
     <div class="menu-group">
       <div class="menu-title">NGHIỆP VỤ</div>
+      <a class="menu-item" data-page="debts">💳 Công nợ</a>
       <a class="menu-item" data-page="orders_view">📑 Quản lý đơn hàng</a>
       <a class="menu-item" data-page="order">🧾 Tạo đơn mới</a>
+      <a class="menu-item" data-page="manufacturing">🧵 Sản xuất</a>
       <a class="menu-item" data-page="timesheet">📝 Chấm công</a>
       <a class="menu-item" data-page="payroll">💰 Tính lương</a>
     </div>
@@ -43,6 +49,7 @@
 
   <!-- MAIN -->
   <div class="main">
+    <!-- TOPBAR -->
     <header class="topbar">
       <div class="top-title">Hệ thống Quản lý</div>
       <div class="actions">
@@ -52,35 +59,61 @@
       </div>
     </header>
 
-    <!-- Dashboard shell -->
+    <!-- DASHBOARD SHELL (KPI + quick actions) -->
     <section class="content" id="dashboard-shell">
       <div class="kpi-grid">
-        <div class="kpi-card"><div class="kpi-title">ĐƠN HÀNG HÔM NAY</div><div class="kpi-value" id="kpi_today_orders">0</div><div class="kpi-sub">Tổng: <span id="kpi_today_amount">0 VND</span></div></div>
-        <div class="kpi-card"><div class="kpi-title">ĐƠN HÀNG TUẦN NÀY</div><div class="kpi-value" id="kpi_week_orders">0</div><div class="kpi-sub">Tổng: <span id="kpi_week_amount">0 VND</span></div></div>
-        <div class="kpi-card"><div class="kpi-title">ĐƠN HÀNG THÁNG NÀY</div><div class="kpi-value" id="kpi_month_orders">0</div><div class="kpi-sub">Tổng: <span id="kpi_month_amount">0 VND</span></div></div>
-        <div class="kpi-card"><div class="kpi-title">TỔNG ĐƠN HÀNG</div><div class="kpi-value" id="kpi_all_orders">0</div><div class="kpi-sub">Tất cả thời gian</div></div>
+        <div class="kpi-card">
+          <div class="kpi-title">ĐƠN HÀNG HÔM NAY</div>
+          <div class="kpi-value" id="kpi_today_orders">0</div>
+          <div class="kpi-sub">Tổng: <span id="kpi_today_amount">0 VND</span></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">ĐƠN HÀNG TUẦN NÀY</div>
+          <div class="kpi-value" id="kpi_week_orders">0</div>
+          <div class="kpi-sub">Tổng: <span id="kpi_week_amount">0 VND</span></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">ĐƠN HÀNG THÁNG NÀY</div>
+          <div class="kpi-value" id="kpi_month_orders">0</div>
+          <div class="kpi-sub">Tổng: <span id="kpi_month_amount">0 VND</span></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">TỔNG ĐƠN HÀNG</div>
+          <div class="kpi-value" id="kpi_all_orders">0</div>
+          <div class="kpi-sub">Tất cả thời gian</div>
+        </div>
       </div>
 
       <div class="card">
         <h3>Quản lý đơn hàng</h3>
         <div class="quick-grid">
-          <button class="quick" data-page="order"><div class="q-icon">📝</div><div>Tạo đơn hàng mới</div></button>
-          <button class="quick" data-page="orders_view"><div class="q-icon">📅</div><div>Đơn hàng hôm nay</div></button>
-          <button class="quick" data-page="orders_view"><div class="q-icon">📈</div><div>Đơn hàng tuần</div></button>
-          <button class="quick" data-page="reports"><div class="q-icon">📄</div><div>Xuất báo cáo</div></button>
+          <button class="quick" data-page="order">
+            <div class="q-icon">📝</div><div>Tạo đơn hàng mới</div>
+          </button>
+          <button class="quick" data-page="orders_view">
+            <div class="q-icon">📅</div><div>Đơn hàng hôm nay</div>
+          </button>
+          <button class="quick" data-page="orders_view">
+            <div class="q-icon">📈</div><div>Đơn hàng tuần</div>
+          </button>
+          <button class="quick" data-page="reports">
+            <div class="q-icon">📄</div><div>Xuất báo cáo</div>
+          </button>
         </div>
       </div>
 
       <div class="card">
         <div class="list-head">
           <h3>📋 Danh sách đơn hàng</h3>
-          <input class="search" id="search_orders" placeholder="Tìm theo mã đơn, khách hàng..." />
+          <input class="search" id="search_orders" placeholder="Tìm kiếm theo mã đơn, khách hàng..." />
         </div>
-        <div id="orders_table_shell"></div>
+        <div id="orders_table_shell">
+          <!-- bảng danh sách render bằng script.js (hoặc đoạn dưới) -->
+        </div>
       </div>
     </section>
 
-    <!-- Dynamic pages -->
+    <!-- Dynamic app pages sẽ render vào đây -->
     <main id="app"></main>
 
     <footer class="foot">© ERP May Mặc — SPA mượt như app</footer>
@@ -88,36 +121,103 @@
 
   <script src="./script.js"></script>
   <script>
-    // Liên kết menu với router
+    // Kết nối menu/sidebar + quick action với router của script.js
     document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('[data-page]').forEach(el => el.addEventListener('click', () => loadPage(el.dataset.page)));
+      document.querySelectorAll('[data-page]').forEach(el => {
+        el.addEventListener('click', () => loadPage(el.dataset.page));
+      });
 
-      // KPI + bảng đơn hàng gọn cho shell (đơn lẻ, không cộng dồn)
-      const API_URL="/.netlify/functions/gas";
-      const fmtVND = n => (Number(n||0)).toLocaleString("vi-VN")+" VND";
+      // Khi vào “Dashboard” thì đồng thời load Orders View rút gọn + KPI
+      loadPage('overview');
 
-      async function _apiGet(sheet){ const r=await fetch(\`\${API_URL}?sheet=\${encodeURIComponent(sheet)}\`); return r.json(); }
-      async function _loadKPI(){
-        const rs=await _apiGet("DonHang"); if(!rs.ok||!rs.rows?.length) return;
-        const [h,...rows]=rs.rows; const idx={Ngay:h.indexOf("NgayTao")>-1?h.indexOf("NgayTao"):h.indexOf("Ngày tạo"), Tong:h.indexOf("TongTien")>-1?h.indexOf("TongTien"):h.indexOf("Tổng tiền")};
-        const today=new Date(); const sameDay=d=>new Date(d).toDateString()===today.toDateString();
-        const sameWeek=d=>(today-new Date(d))/(1000*3600*24)<=7; const sameMonth=d=>{const x=new Date(d); return x.getFullYear()===today.getFullYear()&&x.getMonth()===today.getMonth();};
-        let cD=0,sD=0,cW=0,sW=0,cM=0,sM=0; rows.forEach(r=>{const d=r[idx.Ngay],t=Number(r[idx.Tong]||0); if(sameDay(d)){cD++; sD+=t;} if(sameWeek(d)){cW++; sW+=t;} if(sameMonth(d)){cM++; sM+=t;}});
-        document.getElementById("kpi_today_orders").textContent=cD; document.getElementById("kpi_today_amount").textContent=fmtVND(sD);
-        document.getElementById("kpi_week_orders").textContent=cW; document.getElementById("kpi_week_amount").textContent=fmtVND(sW);
-        document.getElementById("kpi_month_orders").textContent=cM; document.getElementById("kpi_month_amount").textContent=fmtVND(sM);
-        document.getElementById("kpi_all_orders").textContent=rows.length;
+      /* ====== Shell KPI + Bảng đơn rút gọn (theo từng hóa đơn, không cộng dồn) ====== */
+      const API_URL = "/.netlify/functions/gas";
+      const fmtVND = (n) => (Number(n || 0)).toLocaleString("vi-VN") + " VND";
+      async function _apiGet(sheet){
+        const res = await fetch(`${API_URL}?sheet=${encodeURIComponent(sheet)}`);
+        return res.json();
       }
-      async function _loadOrdersShell(q=""){
-        const rs=await _apiGet("DonHang"); if(!rs.ok||!rs.rows?.length){ document.getElementById("orders_table_shell").innerHTML="<div class='muted'>Chưa có dữ liệu</div>"; return;}
-        const [h,...rows]=rs.rows; const idx={Ma:h.indexOf("MaDon")>-1?h.indexOf("MaDon"):h.indexOf("Mã đơn"), Kh:h.indexOf("KhachHang")>-1?h.indexOf("KhachHang"):h.indexOf("Khách hàng"), Ng:h.indexOf("NgayTao")>-1?h.indexOf("NgayTao"):h.indexOf("Ngày tạo"), Tong:h.indexOf("TongTien")>-1?h.indexOf("TongTien"):h.indexOf("Tổng tiền"), Paid:h.indexOf("KhachTra")>-1?h.indexOf("KhachTra"):h.indexOf("Khách trả"), NoCu:h.indexOf("NoCu")>-1?h.indexOf("NoCu"):h.indexOf("Nợ cũ"), Con:h.indexOf("ConNo")>-1?h.indexOf("ConNo"):h.indexOf("Còn nợ")};
-        const kw=(q||"").toLowerCase(); const data=rows.filter(r=>!kw || String(r[idx.Ma]||"").toLowerCase().includes(kw) || String(r[idx.Kh]||"").toLowerCase().includes(kw));
-        let html="<table><thead><tr><th>Mã đơn</th><th>Khách</th><th>Ngày</th><th class='right'>Nợ cũ</th><th class='right'>Tổng</th><th class='right'>Trả</th><th class='right'>Còn nợ</th></tr></thead><tbody>";
-        data.forEach(r=>{ html+=`<tr><td>${r[idx.Ma]}</td><td>${r[idx.Kh]}</td><td>${r[idx.Ng]}</td><td class='right'>${fmtVND(r[idx.NoCu]||0)}</td><td class='right'>${fmtVND(r[idx.Tong]||0)}</td><td class='right'>${fmtVND(r[idx.Paid]||0)}</td><td class='right'>${fmtVND(r[idx.Con]||0)}</td></tr>`; });
-        document.getElementById("orders_table_shell").innerHTML=html+"</tbody></table>";
+
+      async function _loadKPI() {
+        const rs = await _apiGet("DonHang");
+        if (!rs.ok || !rs.rows?.length) return;
+        const [h, ...rows] = rs.rows;
+        const idxNgay = h.indexOf("NgayTao")>-1 ? h.indexOf("NgayTao") : h.indexOf("Ngày tạo");
+        const idxTong = h.indexOf("TongTien")>-1 ? h.indexOf("TongTien") : h.indexOf("Tổng tiền");
+
+        const today = new Date();
+        const sameDay = (d) => new Date(d).toDateString() === today.toDateString();
+        const sameWeek = (d) => (today - new Date(d)) / (1000*3600*24) <= 7;
+        const sameMonth = (d) => {
+          const x = new Date(d);
+          return x.getFullYear() === today.getFullYear() && x.getMonth() === today.getMonth();
+        };
+
+        let cDay=0,sDay=0,cWeek=0,sWeek=0,cMonth=0,sMonth=0;
+        rows.forEach(r=>{
+          const d = r[idxNgay]; const t = Number(r[idxTong]||0);
+          if (sameDay(d))  { cDay++;  sDay += t; }
+          if (sameWeek(d)) { cWeek++; sWeek += t; }
+          if (sameMonth(d)){ cMonth++; sMonth += t; }
+        });
+
+        document.getElementById("kpi_today_orders").textContent = cDay;
+        document.getElementById("kpi_today_amount").textContent = fmtVND(sDay);
+        document.getElementById("kpi_week_orders").textContent = cWeek;
+        document.getElementById("kpi_week_amount").textContent = fmtVND(sWeek);
+        document.getElementById("kpi_month_orders").textContent = cMonth;
+        document.getElementById("kpi_month_amount").textContent = fmtVND(sMonth);
+        document.getElementById("kpi_all_orders").textContent = rows.length;
       }
-      _loadKPI(); _loadOrdersShell();
-      const search=document.getElementById('search_orders'); if(search) search.addEventListener('input', ()=>_loadOrdersShell(search.value||""));
+
+      async function _loadOrdersShell(keyword="") {
+        const rs = await _apiGet("DonHang");
+        if (!rs.ok || !rs.rows?.length) {
+          document.getElementById("orders_table_shell").innerHTML = "<div class='muted'>Chưa có dữ liệu</div>";
+          return;
+        }
+        const [h, ...rows] = rs.rows;
+        const idx = {
+          Ma:   h.indexOf("MaDon")>-1      ? h.indexOf("MaDon")      : h.indexOf("Mã đơn"),
+          Kh:   h.indexOf("KhachHang")>-1  ? h.indexOf("KhachHang")  : h.indexOf("Khách hàng"),
+          Ng:   h.indexOf("NgayTao")>-1    ? h.indexOf("NgayTao")    : h.indexOf("Ngày tạo"),
+          Tong: h.indexOf("TongTien")>-1   ? h.indexOf("TongTien")   : h.indexOf("Tổng tiền"),
+          Paid: h.indexOf("KhachTra")>-1   ? h.indexOf("KhachTra")   : h.indexOf("Khách trả"),
+          NoCu: h.indexOf("NoCu")>-1       ? h.indexOf("NoCu")       : h.indexOf("Nợ cũ"),
+          Con:  h.indexOf("ConNo")>-1      ? h.indexOf("ConNo")      : h.indexOf("Còn nợ"),
+        };
+        const q = (keyword||"").toLowerCase();
+        const data = rows.filter(r =>
+          !q ||
+          String(r[idx.Ma]||"").toLowerCase().includes(q) ||
+          String(r[idx.Kh]||"").toLowerCase().includes(q)
+        );
+
+        let html = "<table><thead><tr>" +
+          "<th>Mã đơn</th><th>Khách hàng</th><th>Ngày</th>" +
+          "<th class='right'>Nợ cũ</th><th class='right'>Tổng</th><th class='right'>Khách trả</th><th class='right'>Còn nợ</th>" +
+          "</tr></thead><tbody>";
+
+        data.forEach(r=>{
+          html += "<tr>" +
+            `<td>${r[idx.Ma]||""}</td>` +
+            `<td>${r[idx.Kh]||""}</td>` +
+            `<td>${r[idx.Ng]||""}</td>` +
+            `<td class="right">${fmtVND(r[idx.NoCu]||0)}</td>` +
+            `<td class="right">${fmtVND(r[idx.Tong]||0)}</td>` +
+            `<td class="right">${fmtVND(r[idx.Paid]||0)}</td>` +
+            `<td class="right">${fmtVND(r[idx.Con]||0)}</td>` +
+          "</tr>";
+        });
+        html += "</tbody></table>";
+        document.getElementById("orders_table_shell").innerHTML = html;
+      }
+
+      _loadKPI();
+      _loadOrdersShell();
+
+      const search = document.getElementById('search_orders');
+      if (search) search.addEventListener('input', () => _loadOrdersShell(search.value || ''));
     });
   </script>
 </body>
